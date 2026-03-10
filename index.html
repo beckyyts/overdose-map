@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>US Overdose Rate — 2018–2022 vs 2020–2024</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #1e1e2e;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --accent: #ff4d6d;
+    --accent2: #4d9fff;
+    --increase: #ff4d6d;
+    --decrease: #4dffb4;
+    --neutral: #888;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .header-left h1 {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .header-left p {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .mode-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mode-btn.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* MAP AREA */
+  .map-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #map-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Breadcrumb */
+  .breadcrumb {
+    position: absolute;
+    top: 16px;
+    left: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    z-index: 10;
+  }
+
+  .breadcrumb .crumb {
+    cursor: pointer;
+    color: var(--accent2);
+    transition: opacity 0.2s;
+  }
+
+  .breadcrumb .crumb:hover { opacity: 0.7; }
+  .breadcrumb .sep { color: var(--border); }
+  .breadcrumb .current { color: var(--text); cursor: default; }
+
+  /* Back button */
+  #back-btn {
+    position: absolute;
+    top: 16px;
+    left: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: none;
+    z-index: 10;
+    transition: border-color 0.2s;
+  }
+
+  #back-btn:hover { border-color: var(--accent2); }
+
+  /* Legend */
+  .legend {
+    position: absolute;
+    bottom: 24px;
+    left: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    z-index: 10;
+    min-width: 220px;
+  }
+
+  .legend-title {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .legend-gradient {
+    height: 8px;
+    border-radius: 4px;
+    width: 100%;
+    margin-bottom: 6px;
+  }
+
+  .legend-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  .legend-na {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  .legend-na-box {
+    width: 14px;
+    height: 8px;
+    border-radius: 2px;
+    background: #222;
+    border: 1px solid #333;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+  }
+
+  .sidebar.open {
+    width: 340px;
+  }
+
+  .sidebar-inner {
+    width: 340px;
+    padding: 24px;
+  }
+
+  .sidebar-close {
+    float: right;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 18px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+
+  .sidebar-close:hover { color: var(--text); }
+
+  .county-name {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  .county-pop {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  /* Rate comparison cards */
+  .rate-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .rate-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .rate-card .label {
+    font-size: 9px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+
+  .rate-card .value {
+    font-size: 22px;
+    font-weight: 800;
+    font-family: 'DM Mono', monospace;
+    line-height: 1;
+  }
+
+  .rate-card .sublabel {
+    font-size: 9px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .change-card {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--border);
+  }
+
+  .change-card .change-label {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+  }
+
+  .change-card .change-value {
+    font-size: 20px;
+    font-weight: 800;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .change-card .change-pct {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    opacity: 0.7;
+    margin-left: 6px;
+  }
+
+  .up { color: var(--increase); }
+  .down { color: var(--decrease); }
+  .na-text { color: var(--muted); font-size: 14px; }
+
+  /* Suppressed warning */
+  .suppressed-note {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 20px;
+  }
+
+  /* Section headers */
+  .section-title {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Stat rows */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .stat-value {
+    font-size: 12px;
+    font-family: 'DM Mono', monospace;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* Bar rows for race/age */
+  .bar-row {
+    margin-bottom: 8px;
+  }
+
+  .bar-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .bar-label { font-size: 11px; color: var(--muted); }
+  .bar-pct { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text); }
+
+  .bar-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent2);
+    transition: width 0.5s ease;
+  }
+
+  .section-gap { margin-bottom: 20px; }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.15s;
+    max-width: 220px;
+  }
+
+  .tooltip.visible { opacity: 1; }
+  .tooltip .t-name { font-weight: 600; margin-bottom: 4px; }
+  .tooltip .t-stat { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+  .tooltip .t-stat span { color: var(--text); }
+
+  /* Map paths */
+  .county-path, .state-path {
+    stroke: #1a1a2a;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .county-path:hover, .state-path:hover { opacity: 0.75; stroke: white; stroke-width: 1.5px; }
+  .county-path.selected { stroke: white; stroke-width: 2px; }
+  .state-boundary { fill: none; stroke: #2a2a3a; stroke-width: 1px; pointer-events: none; }
+
+  /* Loading */
+  #loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    z-index: 50;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>US Drug Overdose Rate</h1>
+    <p>5-Year Estimates · 2018–2022 vs 2020–2024 · County Level</p>
+  </div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="rate_2022">2018–2022</button>
+    <button class="mode-btn" data-mode="rate_2024">2020–2024</button>
+    <button class="mode-btn" data-mode="rate_change">Change</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="map-area">
+    <div id="loading">
+      <div class="spinner"></div>
+      <p>Loading map data…</p>
+    </div>
+
+    <button id="back-btn">← Back to US</button>
+
+    <svg id="map-svg"></svg>
+
+    <div class="legend" id="legend">
+      <div class="legend-title" id="legend-title">Overdose Rate per 100k (2018–2022)</div>
+      <div class="legend-gradient" id="legend-gradient"></div>
+      <div class="legend-labels">
+        <span id="legend-min">0</span>
+        <span id="legend-max">100+</span>
+      </div>
+      <div class="legend-na"><div class="legend-na-box"></div> No data / suppressed</div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-inner" id="sidebar-content"></div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const TOPO_URL = "https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json";
+const DATA_URL = "data/counties.json";
+
+const COLOR_SCHEMES = {
+  rate_2022:   { scale: d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 100]),  label: "Overdose Rate per 100k (2018–2022)", min: "0", max: "100+" },
+  rate_2024:   { scale: d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 100]),  label: "Overdose Rate per 100k (2020–2024)", min: "0", max: "100+" },
+  rate_change: { scale: d3.scaleDiverging(d3.interpolateRdBu).domain([50, 0, -50]), label: "Change in Rate per 100k", min: "+50", max: "−50" },
+};
+
+// ─── STATE ────────────────────────────────────────────────
+let currentMode = "rate_2022";
+let currentView = "us";       // "us" | state fips
+let selectedFips = null;
+let topoData, countyData, countyMap;
+let path, projection, svg, g;
+
+// ─── INIT ─────────────────────────────────────────────────
+async function init() {
+  try {
+    [topoData, countyData] = await Promise.all([
+      d3.json(TOPO_URL),
+      d3.json(DATA_URL)
+    ]);
+  } catch(e) {
+    document.querySelector("#loading p").textContent = "Error loading data. Check data/counties.json exists.";
+    return;
+  }
+
+  // Build lookup map
+  countyMap = new Map(countyData.map(d => [d.fips, d]));
+
+  setupSVG();
+  setupControls();
+  drawUS();
+
+  document.getElementById("loading").style.display = "none";
+}
+
+// ─── SVG SETUP ────────────────────────────────────────────
+function setupSVG() {
+  svg = d3.select("#map-svg");
+  g = svg.append("g");
+}
+
+function getSize() {
+  const el = document.querySelector(".map-area");
+  return { w: el.clientWidth, h: el.clientHeight };
+}
+
+// ─── CONTROLS ─────────────────────────────────────────────
+function setupControls() {
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentMode = btn.dataset.mode;
+      updateLegend();
+      updateColors();
+    });
+  });
+
+  document.getElementById("back-btn").addEventListener("click", () => {
+    closeSidebar();
+    drawUS();
+  });
+}
+
+// ─── COLOR ────────────────────────────────────────────────
+function getColor(fips) {
+  const d = countyMap.get(fips);
+  if (!d) return "#1a1a2a";
+  const v = d[currentMode];
+  if (v === null || v === undefined) return "#1a1a2a";
+  const scheme = COLOR_SCHEMES[currentMode];
+  return scheme.scale(v);
+}
+
+function updateColors() {
+  g.selectAll(".county-path").attr("fill", d => getColor(d.id.toString().padStart(5, "0")));
+  g.selectAll(".state-path").attr("fill", d => {
+    // state view not recolored here; handled in drawState
+  });
+}
+
+// ─── LEGEND ───────────────────────────────────────────────
+function updateLegend() {
+  const scheme = COLOR_SCHEMES[currentMode];
+  document.getElementById("legend-title").textContent = scheme.label;
+  document.getElementById("legend-min").textContent = scheme.min;
+  document.getElementById("legend-max").textContent = scheme.max;
+
+  const grad = document.getElementById("legend-gradient");
+  if (currentMode === "rate_change") {
+    grad.style.background = "linear-gradient(to right, #2166ac, #f7f7f7, #d6604d)";
+  } else {
+    grad.style.background = "linear-gradient(to right, #ffffd4, #fed98e, #fe9929, #d95f0e, #993404)";
+  }
+}
+
+// ─── DRAW US ──────────────────────────────────────────────
+function drawUS() {
+  currentView = "us";
+  document.getElementById("back-btn").style.display = "none";
+  g.selectAll("*").remove();
+
+  const { w, h } = getSize();
+  const counties = topojson.feature(topoData, topoData.objects.counties);
+  const states   = topojson.feature(topoData, topoData.objects.states);
+  const mesh     = topojson.mesh(topoData, topoData.objects.states, (a, b) => a !== b);
+
+  // Fit projection to container
+  projection = d3.geoIdentity().reflectY(true).fitSize([w, h], counties);
+  path = d3.geoPath().projection(projection);
+
+  // Counties
+  g.selectAll(".county-path")
+    .data(counties.features)
+    .join("path")
+    .attr("class", "county-path")
+    .attr("d", path)
+    .attr("fill", d => getColor(d.id.toString().padStart(5, "0")))
+    .attr("stroke-width", 0.3)
+    .on("mousemove", (event, d) => showTooltip(event, d.id.toString().padStart(5, "0")))
+    .on("mouseleave", hideTooltip)
+    .on("click", (event, d) => {
+      const fips = d.id.toString().padStart(5, "0");
+      drawState(fips.slice(0, 2));
+    });
+
+  // State boundaries on top
+  g.append("path")
+    .attr("class", "state-boundary")
+    .attr("d", path(mesh));
+
+  updateLegend();
+}
+
+// ─── DRAW STATE ───────────────────────────────────────────
+function drawState(stateFips) {
+  currentView = stateFips;
+  document.getElementById("back-btn").style.display = "block";
+  g.selectAll("*").remove();
+
+  const { w, h } = getSize();
+  const allCounties = topojson.feature(topoData, topoData.objects.counties);
+  const stateCounties = {
+    type: "FeatureCollection",
+    features: allCounties.features.filter(d => d.id.toString().padStart(5,"0").slice(0,2) === stateFips)
+  };
+
+  if (stateCounties.features.length === 0) return;
+
+  projection = d3.geoIdentity().reflectY(true).fitExtent([[40, 40], [w - 40, h - 40]], stateCounties);
+  path = d3.geoPath().projection(projection);
+
+  g.selectAll(".county-path")
+    .data(stateCounties.features)
+    .join("path")
+    .attr("class", "county-path")
+    .attr("d", path)
+    .attr("fill", d => getColor(d.id.toString().padStart(5,"0")))
+    .attr("stroke-width", 0.8)
+    .on("mousemove", (event, d) => showTooltip(event, d.id.toString().padStart(5,"0")))
+    .on("mouseleave", hideTooltip)
+    .on("click", (event, d) => {
+      const fips = d.id.toString().padStart(5,"0");
+      // Deselect if same
+      if (selectedFips === fips) {
+        closeSidebar();
+        selectedFips = null;
+        g.selectAll(".county-path").classed("selected", false);
+        return;
+      }
+      selectedFips = fips;
+      g.selectAll(".county-path").classed("selected", dd => dd.id.toString().padStart(5,"0") === fips);
+      showSidebar(fips);
+    });
+}
+
+// ─── TOOLTIP ──────────────────────────────────────────────
+function showTooltip(event, fips) {
+  const d = countyMap.get(fips);
+  const tip = document.getElementById("tooltip");
+  if (!d) return;
+
+  const r22 = d.rate_2022 != null ? d.rate_2022.toFixed(1) : "N/A";
+  const r24 = d.rate_2024 != null ? d.rate_2024.toFixed(1) : "N/A";
+  const chg = d.rate_change != null ? (d.rate_change > 0 ? "+" : "") + d.rate_change.toFixed(1) : "N/A";
+
+  tip.innerHTML = `
+    <div class="t-name">${d.name}</div>
+    <div class="t-stat">2018–22: <span>${r22}</span> · 2020–24: <span>${r24}</span></div>
+    <div class="t-stat">Change: <span>${chg}</span> per 100k</div>
+  `;
+
+  tip.style.left = (event.clientX + 12) + "px";
+  tip.style.top  = (event.clientY - 10) + "px";
+  tip.classList.add("visible");
+}
+
+function hideTooltip() {
+  document.getElementById("tooltip").classList.remove("visible");
+}
+
+// ─── SIDEBAR ──────────────────────────────────────────────
+function showSidebar(fips) {
+  const d = countyMap.get(fips);
+  if (!d) return;
+
+  const sidebar = document.getElementById("sidebar");
+  const content = document.getElementById("sidebar-content");
+
+  const r22  = d.rate_2022  != null ? d.rate_2022.toFixed(1)  : null;
+  const r24  = d.rate_2024  != null ? d.rate_2024.toFixed(1)  : null;
+  const chg  = d.rate_change     != null ? d.rate_change.toFixed(1)   : null;
+  const chgp = d.rate_change_pct != null ? d.rate_change_pct.toFixed(1) : null;
+
+  const chgClass = d.rate_change > 0 ? "up" : d.rate_change < 0 ? "down" : "";
+  const chgSign  = d.rate_change > 0 ? "+" : "";
+
+  const suppNote = (d.suppressed_2022 || d.suppressed_2024)
+    ? `<div class="suppressed-note">⚠ Some data suppressed (small county — federal privacy rule for counts &lt;10)</div>`
+    : "";
+
+  const fmt = (v, suffix="") => v != null ? `${v}${suffix}` : `<span class="na-text">N/A</span>`;
+  const fmtDollar = v => v != null ? `$${Number(v).toLocaleString()}` : `<span class="na-text">N/A</span>`;
+
+  function barRow(label, val) {
+    const pct = val != null ? val : 0;
+    return `
+      <div class="bar-row">
+        <div class="bar-header">
+          <span class="bar-label">${label}</span>
+          <span class="bar-pct">${val != null ? val.toFixed(1)+"%" : "N/A"}</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }
+
+  content.innerHTML = `
+    <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+    <div class="county-name">${d.name}</div>
+    <div class="county-pop">Population: ${d.pop != null ? Number(d.pop).toLocaleString() : "N/A"}</div>
+
+    <div class="rate-cards">
+      <div class="rate-card">
+        <div class="label">2018–2022</div>
+        <div class="value">${r22 ?? '<span class="na-text" style="font-size:14px">N/A</span>'}</div>
+        <div class="sublabel">per 100k</div>
+      </div>
+      <div class="rate-card">
+        <div class="label">2020–2024</div>
+        <div class="value">${r24 ?? '<span class="na-text" style="font-size:14px">N/A</span>'}</div>
+        <div class="sublabel">per 100k</div>
+      </div>
+    </div>
+
+    ${chg != null ? `
+    <div class="change-card">
+      <div class="change-label">Period Change</div>
+      <div>
+        <span class="change-value ${chgClass}">${chgSign}${chg}</span>
+        ${chgp != null ? `<span class="change-pct ${chgClass}">(${chgSign}${chgp}%)</span>` : ""}
+      </div>
+    </div>` : ""}
+
+    ${suppNote}
+
+    <div class="section-title">Socioeconomic Indicators</div>
+    <div class="section-gap">
+      <div class="stat-row">
+        <span class="stat-label">Median Income</span>
+        <span class="stat-value">${fmtDollar(d.median_income)}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Poverty Rate</span>
+        <span class="stat-value">${fmt(d.poverty, "%")}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Unemployment</span>
+        <span class="stat-value">${fmt(d.unemployment, "%")}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Uninsured</span>
+        <span class="stat-value">${fmt(d.uninsured, "%")}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Bachelor's Degree+</span>
+        <span class="stat-value">${fmt(d.bachelors, "%")}</span>
+      </div>
+    </div>
+
+    <div class="section-title">Race / Ethnicity</div>
+    <div class="section-gap">
+      ${barRow("White", d.white)}
+      ${barRow("Black", d.black)}
+      ${barRow("Hispanic", d.hispanic)}
+      ${barRow("Native", d.native)}
+      ${barRow("Asian", d.asian)}
+    </div>
+
+    <div class="section-title">Age Groups at Risk</div>
+    <div class="section-gap">
+      ${barRow("Age 20–24", d.age_20to24)}
+      ${barRow("Age 25–34", d.age_25to34)}
+      ${barRow("Age 35–44", d.age_35to44)}
+      ${barRow("Age 45–54", d.age_45to54)}
+    </div>
+  `;
+
+  sidebar.classList.add("open");
+}
+
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+  selectedFips = null;
+  g.selectAll(".county-path").classed("selected", false);
+}
+
+// ─── RESIZE ───────────────────────────────────────────────
+window.addEventListener("resize", () => {
+  if (currentView === "us") drawUS();
+  else drawState(currentView);
+});
+
+// ─── START ────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
