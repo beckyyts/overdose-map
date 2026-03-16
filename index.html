@@ -9,9 +9,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 <style>
   :root {
-    --bg: #0a0a0f;
-    --surface: #13131a;
-    --border: #1e1e2e;
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #21262d;
     --text: #e8e8f0;
     --muted: #6b6b80;
     --accent: #ff4d6d;
@@ -504,7 +504,7 @@ const DATA_URL = "data/counties.json";
 const COLOR_SCHEMES = {
   rate_2022:   { scale: d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 100]),  label: "Overdose Rate per 100k (2018–2022)", min: "0", max: "100+" },
   rate_2024:   { scale: d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 100]),  label: "Overdose Rate per 100k (2020–2024)", min: "0", max: "100+" },
-  rate_change: { scale: d3.scaleDiverging(d3.interpolateRdBu).domain([50, 0, -50]), label: "Change in Rate per 100k", min: "+50", max: "−50" },
+  rate_change: { scale: d3.scaleDiverging(d3.interpolateRdBu).domain([50, 0, -50]), label: "Change in Rate per 100k", min: "-50", max: "+50" },
 };
 
 // ─── STATE ────────────────────────────────────────────────
@@ -513,6 +513,7 @@ let currentView = "us";       // "us" | state fips
 let selectedFips = null;
 let topoData, countyData, countyMap;
 let path, projection, svg, g;
+let zoomBehavior = null;
 
 // ─── INIT ─────────────────────────────────────────────────
 async function init() {
@@ -532,6 +533,8 @@ async function init() {
   setupSVG();
   setupControls();
   drawUS();
+  setupZoom();
+
 
   document.getElementById("loading").style.display = "none";
 }
@@ -568,9 +571,9 @@ function setupControls() {
 // ─── COLOR ────────────────────────────────────────────────
 function getColor(fips) {
   const d = countyMap.get(fips);
-  if (!d) return "#1a1a2a";
+  if (!d) return "#1e2d45";
   const v = d[currentMode];
-  if (v === null || v === undefined) return "#1a1a2a";
+  if (v === null || v === undefined) return "#1e2d45";
   const scheme = COLOR_SCHEMES[currentMode];
   return scheme.scale(v);
 }
@@ -602,6 +605,7 @@ function drawUS() {
   currentView = "us";
   document.getElementById("back-btn").style.display = "none";
   g.selectAll("*").remove();
+  setupZoom(); // 回到全美地圖時重新開啟zoom
 
   const { w, h } = getSize();
   const counties = topojson.feature(topoData, topoData.objects.counties);
@@ -609,7 +613,7 @@ function drawUS() {
   const mesh     = topojson.mesh(topoData, topoData.objects.states, (a, b) => a !== b);
 
   // Fit projection to container
-  projection = d3.geoIdentity().reflectY(true).fitSize([w, h], counties);
+  projection = d3.geoIdentity().reflectY(false).fitSize([w, h], counties);
   path = d3.geoPath().projection(projection);
 
   // Counties
@@ -631,7 +635,41 @@ function drawUS() {
   g.append("path")
     .attr("class", "state-boundary")
     .attr("d", path(mesh));
+// State overlay with semi-transparent fill + border
+g.selectAll(".state-overlay")
+  .data(states.features)
+  .join("path")
+  .attr("class", "state-overlay")
+  .attr("d", path)
+  .attr("fill", "rgba(0,0,0,0.2)")
+  .attr("stroke", "rgba(255,255,255,0.6)")
+  .attr("stroke-width", "1px")
+  .style("pointer-events", "none");
 
+// State name labels
+g.selectAll(".state-label")
+  .data(states.features)
+  .join("text")
+  .attr("class", "state-label")
+  .attr("transform", d => `translate(${path.centroid(d)})`)
+  .attr("text-anchor", "middle")
+  .attr("dy", "0.35em")
+  .style("font-size", "11px")
+  .style("font-family", "DM Mono, monospace")
+  .style("fill", "white")
+  .style("pointer-events", "none")
+  .style("paint-order", "stroke")
+  .style("stroke", "rgba(0,0,0,0.8)")
+  .style("stroke-width", "2px")
+  .text(d => {
+  const abbr = {
+    "Vermont": "VT", "New Hampshire": "NH", "Massachusetts": "MA",
+    "Rhode Island": "RI", "Connecticut": "CT", "New Jersey": "NJ",
+    "Delaware": "DE", "Maryland": "MD", "District of Columbia": "DC",
+    "Hawaii": "HI"
+  };
+  return abbr[d.properties.name] || d.properties.name;
+});
   updateLegend();
 }
 
@@ -639,7 +677,16 @@ function drawUS() {
 function drawState(stateFips) {
   currentView = stateFips;
   document.getElementById("back-btn").style.display = "block";
+  // Show state name
+const stateName = topojson.feature(topoData, topoData.objects.states).features
+  .find(d => d.id.toString().padStart(2,"0") === stateFips)?.properties.name || stateFips;
+document.getElementById("back-btn").textContent = `← ${stateName}`;
   g.selectAll("*").remove();
+  // 如果存在縮放行為，先回復到原始視窗再停用 zoom
+  if (zoomBehavior) {
+    svg.transition().duration(250).call(zoomBehavior.transform, d3.zoomIdentity);
+    svg.on(".zoom", null);
+  }
 
   const { w, h } = getSize();
   const allCounties = topojson.feature(topoData, topoData.objects.counties);
@@ -650,7 +697,7 @@ function drawState(stateFips) {
 
   if (stateCounties.features.length === 0) return;
 
-  projection = d3.geoIdentity().reflectY(true).fitExtent([[40, 40], [w - 40, h - 40]], stateCounties);
+  projection = d3.geoIdentity().reflectY(false).fitExtent([[40, 40], [w - 40, h - 40]], stateCounties);
   path = d3.geoPath().projection(projection);
 
   g.selectAll(".county-path")
@@ -816,7 +863,31 @@ function closeSidebar() {
   selectedFips = null;
   g.selectAll(".county-path").classed("selected", false);
 }
+// ─── ZOOM ────────────────────────────────────────────────
+function setupZoom() {
+  // create once and reuse (so we can reset/disable later)
+  if (zoomBehavior) {
+    svg.call(zoomBehavior);
+    return zoomBehavior;
+  }
 
+  zoomBehavior = d3.zoom()
+    .scaleExtent([1, 8])
+    .on("zoom", (event) => {
+      g.attr("transform", event.transform);
+    });
+
+  svg.call(zoomBehavior);
+
+  svg.on("dblclick.zoom", () => {
+    svg.transition().duration(500).call(
+      zoomBehavior.transform,
+      d3.zoomIdentity
+    );
+  });
+
+  return zoomBehavior;
+}
 // ─── RESIZE ───────────────────────────────────────────────
 window.addEventListener("resize", () => {
   if (currentView === "us") drawUS();
