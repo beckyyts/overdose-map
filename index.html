@@ -604,9 +604,9 @@ function renderRankingChart() {
               : "rate_2022";
 
   const sorted = chartCounties
-    .filter(d => d[field] != null)
+    .filter(d => d[field] != null && (field !== "residual" || d.is_outlier))
     .sort((a, b) => b[field] - a[field])
-    .slice(0, 15);
+    .slice(0, 20);
 
   if (sorted.length === 0) { el.innerHTML = `<span style="color:var(--muted);font-family:'DM Mono';font-size:11px">No data</span>`; return; }
 
@@ -882,7 +882,7 @@ function renderHistogramChart() {
               : currentMode === "rate_2024"    ? "rate_2024"
               : "rate_2022";
 
-  const dataObjs = chartCounties.filter(d => d[field] != null);
+  const dataObjs = chartCounties.filter(d => d[field] != null && (field !== "residual" || d.is_outlier));
   const data = dataObjs.map(d => d[field]);
 
   if (data.length === 0) { el.innerHTML = `<span style="color:var(--muted);font-size:11px;font-family:'DM Mono'">No data</span>`; return; }
