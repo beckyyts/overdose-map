@@ -459,6 +459,12 @@
       <span class="chart-context" id="chart-context">National · All Counties</span>
       <button class="chart-panel-toggle" id="chart-toggle">▼ Hide</button>
     </div>
+    <div id="methodology-note" style="display:none;padding:10px 16px 0;font-family:DM Mono,monospace;font-size:11px;color:#8899aa;line-height:1.6;border-top:1px solid #1e2d45">
+      <strong style="color:#aabbcc">Model A3 — Baseline Vulnerability Model</strong><br>
+      OLS regression (HC3 robust SE) · 6 socioeconomic predictors · N = 1,070 counties · R² = 0.186<br>
+      Predictors: poverty rate, uninsured rate, race (other, two+), age 25–34, age 45–54 (2022 baseline)<br>
+      <span style="color:#e05c6e">Outlier counties</span>: residual in top 20 — actual worsening far exceeds model prediction.
+    </div>
     <div class="chart-content">
       <div class="chart-view active" id="chart-ranking"></div>
       <div class="chart-view" id="chart-compare"></div>
@@ -538,6 +544,7 @@ function setupControls() {
       updateLegend();
       updateColors();
       updateOutlierDots();
+      document.getElementById("methodology-note").style.display = currentMode === "unexplained" ? "block" : "none";
       renderActiveChart();
     });
   });
@@ -606,7 +613,7 @@ function renderRankingChart() {
   const sorted = chartCounties
     .filter(d => d[field] != null && (field !== "residual" || d.is_outlier))
     .sort((a, b) => b[field] - a[field])
-    .slice(0, 20);
+    .slice(0, 15);
 
   if (sorted.length === 0) { el.innerHTML = `<span style="color:var(--muted);font-family:'DM Mono';font-size:11px">No data</span>`; return; }
 
