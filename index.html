@@ -31,6 +31,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
   }
 
   header {
@@ -398,6 +399,387 @@
 </head>
 <body>
 
+<!-- ─── SCROLLYTELLING INTRO ─────────────────────────────── -->
+<style>
+  /* INTRO OVERLAY */
+  #intro-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    pointer-events: none;
+  }
+
+  /* Left: scroll container */
+  #intro-scroll {
+    width: 560px;
+    flex-shrink: 0;
+    height: 100vh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    pointer-events: all;
+    position: relative;
+    z-index: 10;
+  }
+  #intro-scroll::-webkit-scrollbar { display: none; }
+
+  .intro-scene {
+    height: 100vh;
+    scroll-snap-align: start;
+    display: flex;
+    align-items: center;
+    padding: 0 52px;
+  }
+
+  .intro-card {
+    background: rgba(13,17,23,0.94);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 44px 48px;
+    width: 100%;
+  }
+
+  .intro-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 18px;
+    opacity: 0.9;
+  }
+
+  .intro-headline {
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    font-size: 26px;
+    line-height: 1.45;
+    color: var(--text);
+    margin-bottom: 18px;
+    letter-spacing: -0.01em;
+  }
+
+  .intro-headline .highlight {
+    color: var(--accent);
+  }
+
+  .intro-body {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--muted);
+  }
+
+  .intro-stat {
+    margin-top: 22px;
+    background: rgba(255,77,109,0.08);
+    border: 1px solid rgba(255,77,109,0.2);
+    border-radius: 12px;
+    padding: 20px 24px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .intro-stat .stat-big {
+    font-size: 42px;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: -0.02em;
+  }
+
+  .intro-stat .stat-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+
+  .intro-divider {
+    width: 32px;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 1px;
+    margin: 22px 0;
+    opacity: 0.6;
+  }
+
+  /* Right: map backdrop (transparent, shows the real map underneath) */
+  #intro-map-backdrop {
+    flex: 1;
+    height: 100vh;
+    pointer-events: none;
+  }
+
+  /* Progress dots */
+  #intro-progress {
+    position: fixed;
+    left: 568px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1001;
+    pointer-events: none;
+  }
+
+  .progress-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.3s, transform 0.3s;
+  }
+  .progress-dot.active {
+    background: var(--accent);
+    transform: scale(1.4);
+  }
+
+  /* Enter button (last scene) */
+  .intro-enter-btn {
+    margin-top: 24px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 28px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    pointer-events: all;
+    transition: opacity 0.2s, transform 0.2s;
+    width: 100%;
+    letter-spacing: 0.05em;
+  }
+  .intro-enter-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+  /* Skip button */
+  #intro-skip {
+    position: fixed;
+    bottom: 28px;
+    left: 280px;
+    transform: translateX(-50%);
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    z-index: 1001;
+    pointer-events: all;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  #intro-skip:hover { color: var(--text); border-color: var(--accent2); }
+
+  /* Scroll hint */
+  #intro-scroll-hint {
+    position: fixed;
+    bottom: 28px;
+    left: 280px;
+    transform: translateX(-50%);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    z-index: 1001;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 1;
+    transition: opacity 0.5s;
+  }
+  #intro-scroll-hint::before {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 24px;
+    background: var(--muted);
+    animation: scrollPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes scrollPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  /* Fade out animation */
+  #intro-overlay.exiting {
+    animation: introFadeOut 0.7s ease forwards;
+  }
+  @keyframes introFadeOut {
+    to { opacity: 0; pointer-events: none; }
+  }
+</style>
+
+<div id="intro-overlay">
+  <div id="intro-scroll">
+
+    <!-- Scene 1: Knott County hook -->
+    <div class="intro-scene" data-scene="0" data-mode="rate_change" data-county="21119">
+      <div class="intro-card">
+        <div class="intro-label">Knott County · Kentucky</div>
+        <div class="intro-headline">A small county in Appalachia.<br>Poverty is high. Insurance is scarce.<br><span class="highlight">And overdose deaths are rising.</span></div>
+        <div class="intro-divider"></div>
+        <div class="intro-body">Population under 14,000. Fully rural. Nearly a quarter of residents live below the poverty line. Between 2018–2022 and 2020–2024, overdose deaths worsened significantly.</div>
+        <div class="intro-stat">
+          <div class="stat-big">+32.4</div>
+          <div class="stat-desc">change in overdose rate per 100k · 2018–2022 vs 2020–2024</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 2: The model predicted improvement -->
+    <div class="intro-scene" data-scene="1" data-mode="unexplained" data-county="21119">
+      <div class="intro-card">
+        <div class="intro-label">The Model Said Otherwise</div>
+        <div class="intro-headline">We tried to explain it with data.</div>
+        <div class="intro-divider"></div>
+        <div class="intro-body">Using poverty rate, insurance coverage, race, and age — our model predicted Knott County's overdose rate would <em style="color:var(--decrease)">improve by −28.8</em>.</div>
+        <div class="intro-stat">
+          <div class="stat-big" style="color:var(--accent)">+61.1</div>
+          <div class="stat-desc">unexplained gap — the difference between what the model predicted and what actually happened</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 3: Not just one county -->
+    <div class="intro-scene" data-scene="2" data-mode="unexplained">
+      <div class="intro-card">
+        <div class="intro-label">Not Just One County</div>
+        <div class="intro-headline">Knott isn't alone.<br><span class="highlight">Twenty counties</span> defy explanation.</div>
+        <div class="intro-divider"></div>
+        <div class="intro-body">Across Kentucky, Washington, Alabama, and beyond — a cluster of counties worsened far beyond what socioeconomic factors can predict. The dots on the map mark where the data breaks down.</div>
+      </div>
+    </div>
+
+    <!-- Scene 4: The big picture -->
+    <div class="intro-scene" data-scene="3" data-mode="rate_change">
+      <div class="intro-card">
+        <div class="intro-label">The Bigger Picture</div>
+        <div class="intro-headline">Overall, America is improving.<br>But not everywhere.</div>
+        <div class="intro-divider"></div>
+        <div class="intro-body">Comparing 2018–2022 to 2020–2024, most counties saw overdose death rates fall. The progress is real — but unevenly distributed. Some places are being left behind.</div>
+      </div>
+    </div>
+
+    <!-- Scene 5: The core finding -->
+    <div class="intro-scene" data-scene="4" data-mode="unexplained">
+      <div class="intro-card">
+        <div class="intro-label">The Core Finding</div>
+        <div class="intro-headline">We know some of the reasons.<br><span class="highlight">Not all of them.</span></div>
+        <div class="intro-divider"></div>
+        <div class="intro-body">Poverty. Lack of insurance. Race. Age. These factors matter — but they explain only about <strong style="color:var(--text)">one-fifth</strong> of the variation in how counties changed.</div>
+        <div class="intro-stat">
+          <div class="stat-big">~19%</div>
+          <div class="stat-desc">of the variation in county-level change explained by socioeconomic factors (OLS regression · 1,070 counties)</div>
+        </div>
+        <div class="intro-body" style="margin-top:16px">The remaining 81% points to something we don't yet understand.</div>
+      </div>
+    </div>
+
+    <!-- Scene 6: Enter -->
+    <div class="intro-scene" data-scene="5" data-mode="unexplained">
+      <div class="intro-card">
+        <div class="intro-label">Explore the Data</div>
+        <div class="intro-headline">Where is your county?</div>
+        <div class="intro-divider"></div>
+        <div class="intro-body">Search any county or state. Switch between views. Find the places where progress stalled — and where it didn't.</div>
+        <button class="intro-enter-btn" id="intro-enter-btn">Explore the Map →</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="intro-map-backdrop"></div>
+</div>
+
+<!-- Progress dots -->
+<div id="intro-progress">
+  <div class="progress-dot active"></div>
+  <div class="progress-dot"></div>
+  <div class="progress-dot"></div>
+  <div class="progress-dot"></div>
+  <div class="progress-dot"></div>
+  <div class="progress-dot"></div>
+</div>
+
+<button id="intro-skip">Skip intro</button>
+<div id="intro-scroll-hint">scroll</div>
+
+<script>
+(function() {
+  const overlay   = document.getElementById('intro-overlay');
+  const scrollEl  = document.getElementById('intro-scroll');
+  const scenes    = document.querySelectorAll('.intro-scene');
+  const dots      = document.querySelectorAll('.progress-dot');
+  const skipBtn   = document.getElementById('intro-skip');
+  const enterBtn  = document.getElementById('intro-enter-btn');
+  const hint      = document.getElementById('intro-scroll-hint');
+  let currentScene = 0;
+  let dismissed = false;
+
+  function dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    overlay.classList.add('exiting');
+    document.getElementById('intro-progress').style.display = 'none';
+    skipBtn.style.display = 'none';
+    hint.style.display = 'none';
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 700);
+  }
+
+  function updateScene(idx) {
+    currentScene = idx;
+    dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+
+    // Hide scroll hint after first scroll
+    if (idx > 0) hint.style.opacity = '0';
+
+    // Sync map mode if map is ready
+    const scene = scenes[idx];
+    const mode = scene.dataset.mode;
+    if (mode && window.setIntroMode) {
+      window.setIntroMode(mode);
+    }
+  }
+
+  // Watch scroll position
+  let ticking = false;
+  scrollEl.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const idx = Math.round(scrollEl.scrollTop / window.innerHeight);
+      if (idx !== currentScene) updateScene(idx);
+      ticking = false;
+    });
+  });
+
+  skipBtn.addEventListener('click', dismiss);
+  enterBtn.addEventListener('click', dismiss);
+
+  // Expose dismiss for external use
+  window.dismissIntro = dismiss;
+
+  // Set initial scene mode once map is ready
+  // Poll until setIntroMode is available (map loads async)
+  const waitForMap = setInterval(() => {
+    if (window.setIntroMode) {
+      clearInterval(waitForMap);
+      updateScene(0);
+    }
+  }, 100);
+})();
+</script>
+
 <header>
   <div class="header-left">
     <h1>US Drug Overdose Rate</h1>
@@ -412,7 +794,7 @@
       <button class="mode-btn active" data-mode="rate_2022">2018–2022</button>
       <button class="mode-btn" data-mode="rate_2024">2020–2024</button>
       <button class="mode-btn" data-mode="rate_change">Change</button>
-      <button class="mode-btn" data-mode="unexplained">Unexplained</button>
+      <button class="mode-btn" data-mode="unexplained">Why Here?</button>
     </div>
   </div>
 </header>
@@ -437,6 +819,7 @@
         <div class="legend-outlier" id="legend-outlier" style="display:none">
           <div class="legend-outlier-dot"></div> Outlier county (top 20)
         </div>
+        <div id="legend-unexplained-note" style="display:none;margin-top:10px;font-size:10px;font-family:'DM Mono',monospace;color:#6b6b80;line-height:1.5;">Red = worsened more than expected.<br>Blue = improved more than expected.</div>
       </div>
       <div class="tooltip" id="tooltip"></div>
     </div>
@@ -460,10 +843,16 @@
       <button class="chart-panel-toggle" id="chart-toggle">▼ Hide</button>
     </div>
     <div id="methodology-note" style="display:none;padding:10px 16px 0;font-family:DM Mono,monospace;font-size:11px;color:#8899aa;line-height:1.6;border-top:1px solid #1e2d45">
-      <strong style="color:#aabbcc">Model A3 — Baseline Vulnerability Model</strong><br>
-      OLS regression (HC3 robust SE) · 6 socioeconomic predictors · N = 1,070 counties · R² = 0.186<br>
-      Predictors: poverty rate, uninsured rate, race (other, two+), age 25–34, age 45–54 (2022 baseline)<br>
-      <span style="color:#e05c6e">Outlier counties</span>: residual in top 20 — actual worsening far exceeds model prediction.
+      <div style="color:#ccd6e0;margin-bottom:6px">We used a statistical model to predict how each county's overdose rate should change, based on its poverty rate, insurance coverage, and demographics. Counties shown in red changed far more than the model expected — their worsening remains unexplained.</div>
+      <div style="color:#e05c6e;margin-bottom:4px">● Red dots = outlier counties (top 20) — worsening far exceeds prediction.</div>
+      <details style="margin-top:8px;cursor:pointer">
+        <summary style="color:#556070;font-size:10px;letter-spacing:0.05em">Technical details</summary>
+        <div style="margin-top:6px;color:#556070;font-size:10px;line-height:1.6">
+          Model A3 — Baseline Vulnerability Model<br>
+          OLS regression (HC3 robust SE) · 6 socioeconomic predictors · N = 1,070 counties · R² = 0.186<br>
+          Predictors: poverty rate, uninsured rate, race (other, two+), age 25–34, age 45–54 (2022 baseline)
+        </div>
+      </details>
     </div>
     <div class="chart-content">
       <div class="chart-view active" id="chart-ranking"></div>
@@ -483,7 +872,7 @@ const COLOR_SCHEMES = {
   rate_2022:   { scale: d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 100]),   label: "Overdose Rate per 100k (2018–2022)",      min: "0",   max: "100+" },
   rate_2024:   { scale: d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 100]),   label: "Overdose Rate per 100k (2020–2024)",      min: "0",   max: "100+" },
   rate_change: { scale: d3.scaleDiverging(d3.interpolateRdBu).domain([50, 0, -50]),  label: "Change in Rate per 100k",                 min: "−50", max: "+50"  },
-  unexplained: { scale: d3.scaleDiverging(d3.interpolateRdBu).domain([60, 0, -60]),  label: "Unexplained Change (Model A Residual)",   min: "−60", max: "+60"  },
+  unexplained: { scale: d3.scaleDiverging(d3.interpolateRdBu).domain([60, 0, -60]),  label: "Worsening beyond what poverty & demographics predict",   min: "−60", max: "+60"  },
 };
 
 // ─── STATE ────────────────────────────────────────────────
@@ -521,6 +910,20 @@ async function init() {
 
   setupSearch();
   document.getElementById("loading").style.display = "none";
+
+  // Allow scrollytelling to sync map mode
+  window.setIntroMode = function(mode) {
+    if (!countyData || currentMode === mode) return;
+    currentMode = mode;
+    document.querySelectorAll(".mode-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.mode === mode);
+    });
+    updateLegend();
+    updateColors();
+    updateOutlierDots();
+    document.getElementById("methodology-note").style.display = mode === "unexplained" ? "block" : "none";
+    renderActiveChart();
+  };
 }
 
 // ─── SVG SETUP ────────────────────────────────────────────
@@ -867,9 +1270,10 @@ function renderScatterChart() {
     .text("Overdose Rate per 100k");
 
   const corr = pearsonR(data.map(d => d.poverty), data.map(d => d[field]));
+  const corrLabel = Math.abs(corr) < 0.3 ? "weak correlation" : Math.abs(corr) < 0.6 ? "moderate correlation" : "strong correlation";
   chart.append("text").attr("x", w - 4).attr("y", 14)
     .attr("text-anchor", "end").attr("fill", "var(--accent)").attr("font-size", "11px").attr("font-family", "'DM Mono'")
-    .text(`r = ${corr.toFixed(2)}`);
+    .text(`r = ${corr.toFixed(2)} (${corrLabel})`);
 }
 
 function pearsonR(xs, ys) {
@@ -1009,6 +1413,7 @@ function updateColors() {
 function updateOutlierDots() {
   // show/hide legend hint
   document.getElementById("legend-outlier").style.display = currentMode === "unexplained" ? "flex" : "none";
+  document.getElementById("legend-unexplained-note").style.display = currentMode === "unexplained" ? "block" : "none";
 
   // remove old dots
   g.selectAll(".outlier-dot").remove();
@@ -1052,6 +1457,7 @@ function updateLegend() {
     grad.style.background = "linear-gradient(to right, #ffffd4, #fed98e, #fe9929, #d95f0e, #993404)";
   }
   document.getElementById("legend-outlier").style.display = currentMode === "unexplained" ? "flex" : "none";
+  document.getElementById("legend-unexplained-note").style.display = currentMode === "unexplained" ? "block" : "none";
 }
 
 // ─── DRAW US ──────────────────────────────────────────────
@@ -1230,6 +1636,9 @@ function showSidebar(fips) {
   const modelSection = d.residual != null ? `
     <div class="section-title">Model Analysis</div>
     <div class="section-gap">
+      <div style="font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);line-height:1.6;margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+        Based on this county's poverty rate, insurance coverage, race, and age — the model ${d.fitted < 0 ? "predicted an improvement" : "predicted a change"} of <strong style="color:var(--text)">${d.fitted > 0 ? "+" : ""}${d.fitted.toFixed(1)}</strong>. The actual change was <strong style="${d.rate_change > 0 ? "color:var(--increase)" : "color:var(--decrease)"}">${d.rate_change > 0 ? "+" : ""}${chg}</strong>.
+      </div>
       <div class="stat-row">
         <span class="stat-label">Predicted Change</span>
         <span class="stat-value">${d.fitted > 0 ? "+" : ""}${d.fitted.toFixed(1)}</span>
@@ -1239,9 +1648,10 @@ function showSidebar(fips) {
         <span class="stat-value ${chgClass}">${chgSign}${chg}</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">Unexplained</span>
+        <span class="stat-label">Unexplained gap</span>
         <span class="stat-value ${d.residual > 0 ? "up" : "down"}">${d.residual > 0 ? "+" : ""}${d.residual.toFixed(1)}</span>
       </div>
+      <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:8px;opacity:0.7">Model uses race composition (other & multiracial) as predictors alongside poverty and age.</div>
       ${d.is_outlier ? `<div class="outlier-note">⚠ Outlier county — worsening far exceeds socioeconomic prediction (rank #${d.outlier_rank} of 20)</div>` : ""}
     </div>` : "";
 
