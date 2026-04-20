@@ -724,13 +724,17 @@
   let currentScene = 0;
   let dismissed = false;
 
-  function dismiss() {
+  function dismiss(switchToChange) {
     if (dismissed) return;
     dismissed = true;
     overlay.classList.add('exiting');
     document.getElementById('intro-progress').style.display = 'none';
     skipBtn.style.display = 'none';
     hint.style.display = 'none';
+    // Switch to Change view for the most story-relevant first impression
+    if (switchToChange && window.setIntroMode) {
+      window.setIntroMode('rate_change');
+    }
     setTimeout(() => {
       overlay.style.display = 'none';
     }, 700);
@@ -763,11 +767,14 @@
     });
   });
 
-  skipBtn.addEventListener('click', dismiss);
-  enterBtn.addEventListener('click', dismiss);
+  skipBtn.addEventListener('click', () => dismiss(false));
+  enterBtn.addEventListener('click', () => dismiss(true));
 
-  // Expose dismiss for external use
+  // Expose dismiss and reset for external use
   window.dismissIntro = dismiss;
+  window.resetIntroState = function() {
+    dismissed = false;
+  };
 
   // Set initial scene mode once map is ready
   // Poll until setIntroMode is available (map loads async)
@@ -786,6 +793,12 @@
     <p>5-Year Estimates · 2018–2022 vs 2020–2024 · County Level</p>
   </div>
   <div style="display:flex;align-items:center;gap:12px">
+    <button id="replay-intro-btn" style="
+      background:none; border:1px solid var(--border); color:var(--muted);
+      font-family:'DM Mono',monospace; font-size:10px; padding:5px 12px;
+      border-radius:6px; cursor:pointer; transition:color 0.2s,border-color 0.2s;
+      letter-spacing:0.05em;
+    " title="Replay the story intro">↺ Story</button>
     <div class="search-wrapper">
       <input class="search-input" id="search-input" type="text" placeholder="Search county or state…" autocomplete="off">
       <div class="search-dropdown" id="search-dropdown"></div>
@@ -794,10 +807,74 @@
       <button class="mode-btn active" data-mode="rate_2022">2018–2022</button>
       <button class="mode-btn" data-mode="rate_2024">2020–2024</button>
       <button class="mode-btn" data-mode="rate_change">Change</button>
-      <button class="mode-btn" data-mode="unexplained">Why Here?</button>
+      <button class="mode-btn" data-mode="unexplained">Where Data Breaks Down</button>
     </div>
+    <button id="about-btn" style="
+      background:none; border:1px solid var(--border); color:var(--muted);
+      font-family:'DM Mono',monospace; font-size:10px; padding:5px 12px;
+      border-radius:6px; cursor:pointer; transition:color 0.2s,border-color 0.2s;
+      letter-spacing:0.05em; flex-shrink:0;
+    ">About</button>
   </div>
 </header>
+
+<!-- ─── ABOUT MODAL ─────────────────────────────────────── -->
+<div id="about-modal" style="
+  display:none; position:fixed; inset:0; z-index:2000;
+  background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
+  align-items:center; justify-content:center;
+">
+  <div style="
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:36px 40px; max-width:520px; width:90%; position:relative;
+    font-family:'DM Mono',monospace;
+  ">
+    <button id="about-close" style="
+      position:absolute; top:16px; right:18px;
+      background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer;
+    ">✕</button>
+    <div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:12px">About This Project</div>
+    <div style="font-size:18px;font-weight:800;font-family:'Syne',sans-serif;margin-bottom:16px;color:var(--text)">US Drug Overdose Mortality<br>County-Level Analysis</div>
+
+    <div style="font-size:12px;line-height:1.8;color:var(--muted);margin-bottom:20px">
+      This visualization explores how drug overdose death rates changed across U.S. counties between two five-year periods — and asks why some places worsened far beyond what socioeconomic data can explain.
+    </div>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Data Sources</div>
+    <div style="font-size:12px;line-height:2;color:var(--muted);margin-bottom:20px">
+      <div>📊 <strong style="color:var(--text)">CDC WONDER</strong> — Drug overdose death rates (suppressed for counties with &lt;10 deaths to protect privacy)</div>
+      <div>📋 <strong style="color:var(--text)">US Census ACS 5-Year Estimates</strong> — Poverty rate, insurance coverage, demographics</div>
+      <div>🗓 <strong style="color:var(--text)">Time periods:</strong> 2018–2022 and 2020–2024 (5-year rolling estimates)</div>
+      <div>🗺 <strong style="color:var(--text)">Coverage:</strong> 1,070 counties with complete data</div>
+    </div>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Methodology</div>
+    <div style="font-size:12px;line-height:2;color:var(--muted);margin-bottom:20px">
+      <div>An OLS regression model was built to predict how each county's overdose rate would change, based on six socioeconomic predictors. The "unexplained" view shows the gap between prediction and reality.</div>
+      <div style="margin-top:8px">The model explains about <strong style="color:var(--text)">19% of variation</strong> — meaning most of what drives overdose outcomes remains unaccounted for by poverty, insurance, and demographics alone.</div>
+    </div>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">What "Suppressed" Means</div>
+    <div style="font-size:12px;line-height:1.8;color:var(--muted);margin-bottom:20px">
+      Counties with fewer than 10 overdose deaths in a period are shown as "no data." This is a federal privacy rule — small counts are withheld to prevent identification of individuals.
+    </div>
+
+    <div style="font-size:11px;color:#444;margin-top:4px">Built for Data-793 Practicum · 2026</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const btn   = document.getElementById('about-btn');
+  const modal = document.getElementById('about-modal');
+  const close = document.getElementById('about-close');
+  btn.addEventListener('mouseenter', () => { btn.style.color = 'var(--text)'; btn.style.borderColor = 'var(--accent2)'; });
+  btn.addEventListener('mouseleave', () => { btn.style.color = 'var(--muted)'; btn.style.borderColor = 'var(--border)'; });
+  btn.addEventListener('click', () => { modal.style.display = 'flex'; });
+  close.addEventListener('click', () => { modal.style.display = 'none'; });
+  modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+})();
+</script>
 
 <div class="main">
   <div class="top-section">
@@ -807,6 +884,16 @@
         <p>Loading map data…</p>
       </div>
       <button id="back-btn">← Back to US</button>
+      <div id="map-hint" style="
+        position:absolute; bottom:24px; right:20px;
+        background:var(--surface); border:1px solid var(--border);
+        border-radius:8px; padding:8px 14px;
+        font-family:'DM Mono',monospace; font-size:11px; color:var(--muted);
+        z-index:10; pointer-events:none;
+        display:flex; align-items:center; gap:6px;
+      ">
+        <span style="font-size:14px">👆</span> Click any county to explore
+      </div>
       <svg id="map-svg"></svg>
       <div class="legend" id="legend">
         <div class="legend-title" id="legend-title">Overdose Rate per 100k (2018–2022)</div>
@@ -815,7 +902,7 @@
           <span id="legend-min">0</span>
           <span id="legend-max">100+</span>
         </div>
-        <div class="legend-na"><div class="legend-na-box"></div> No data / suppressed</div>
+        <div class="legend-na" title="Some counties have too few cases to report — data is withheld to protect privacy."><div class="legend-na-box"></div> No data / suppressed <span style="color:#556070;font-size:9px;margin-left:2px">(?)</span></div>
         <div class="legend-outlier" id="legend-outlier" style="display:none">
           <div class="legend-outlier-dot"></div> Outlier county (top 20)
         </div>
@@ -834,10 +921,10 @@
     <div class="chart-resize-handle" id="chart-resize-handle"></div>
     <div class="chart-panel-header">
       <div class="chart-tabs">
-        <button class="chart-tab active" data-chart="ranking">Top Counties</button>
-        <button class="chart-tab" data-chart="compare">Period Compare</button>
-        <button class="chart-tab" data-chart="scatter">Rate vs Poverty</button>
-        <button class="chart-tab" data-chart="histogram">Distribution</button>
+        <button class="chart-tab active" data-chart="ranking">Hardest-Hit Counties</button>
+        <button class="chart-tab" data-chart="compare">Compare Two Periods</button>
+        <button class="chart-tab" data-chart="scatter">Poverty vs. Overdose</button>
+        <button class="chart-tab" data-chart="histogram">How Counties Are Spread</button>
       </div>
       <span class="chart-context" id="chart-context">National · All Counties</span>
       <button class="chart-panel-toggle" id="chart-toggle">▼ Hide</button>
@@ -910,6 +997,32 @@ async function init() {
 
   setupSearch();
   document.getElementById("loading").style.display = "none";
+
+  // Replay intro button
+  const replayBtn = document.getElementById("replay-intro-btn");
+  if (replayBtn) {
+    replayBtn.addEventListener("mouseenter", () => { replayBtn.style.color = "var(--text)"; replayBtn.style.borderColor = "var(--accent2)"; });
+    replayBtn.addEventListener("mouseleave", () => { replayBtn.style.color = "var(--muted)"; replayBtn.style.borderColor = "var(--border)"; });
+    replayBtn.addEventListener("click", () => {
+      const overlay = document.getElementById("intro-overlay");
+      const scrollEl = document.getElementById("intro-scroll");
+      const progress = document.getElementById("intro-progress");
+      const skipBtn  = document.getElementById("intro-skip");
+      const hint     = document.getElementById("intro-scroll-hint");
+      if (!overlay) return;
+      // Reset state
+      overlay.classList.remove("exiting");
+      overlay.style.display = "flex";
+      overlay.style.opacity = "1";
+      overlay.style.pointerEvents = "all";
+      scrollEl.scrollTop = 0;
+      if (progress) progress.style.display = "flex";
+      if (skipBtn)  skipBtn.style.display  = "block";
+      if (hint)     { hint.style.display = "flex"; hint.style.opacity = "1"; }
+      // Re-enable dismiss
+      if (window.resetIntroState) window.resetIntroState();
+    });
+  }
 
   // Allow scrollytelling to sync map mode
   window.setIntroMode = function(mode) {
@@ -1261,13 +1374,13 @@ function renderScatterChart() {
 
   chart.append("text").attr("x", w / 2).attr("y", h + 30)
     .attr("text-anchor", "middle").attr("fill", "var(--muted)").attr("font-size", "11px").attr("font-family", "'DM Mono'")
-    .text("Poverty Rate (%)");
+    .text("← Lower poverty rate        Higher poverty rate →");
 
   chart.append("text")
     .attr("transform", "rotate(-90)")
     .attr("x", -h / 2).attr("y", -38)
     .attr("text-anchor", "middle").attr("fill", "var(--muted)").attr("font-size", "11px").attr("font-family", "'DM Mono'")
-    .text("Overdose Rate per 100k");
+    .text("← Fewer overdose deaths       More overdose deaths →");
 
   const corr = pearsonR(data.map(d => d.poverty), data.map(d => d[field]));
   const corrLabel = Math.abs(corr) < 0.3 ? "weak correlation" : Math.abs(corr) < 0.6 ? "moderate correlation" : "strong correlation";
@@ -1378,9 +1491,9 @@ function renderHistogramChart() {
     .call(g => g.select(".domain").attr("stroke", "var(--border)"))
     .call(g => g.selectAll("text").attr("fill", "var(--muted)").attr("font-size", "11px").attr("font-family", "'DM Mono'"));
 
-  const xLabel = field === "rate_change" ? "Change in Rate per 100k"
-               : field === "residual"    ? "Residual (actual − predicted change)"
-               : "Overdose Rate per 100k";
+  const xLabel = field === "rate_change" ? "← Improved          Worsened →"
+               : field === "residual"    ? "← Better than expected          Worse than expected →"
+               : "← Fewer deaths          More deaths →";
   chart.append("text").attr("x", w / 2).attr("y", h + 30)
     .attr("text-anchor", "middle").attr("fill", "var(--muted)").attr("font-size", "11px").attr("font-family", "'DM Mono'")
     .text(xLabel);
@@ -1465,6 +1578,8 @@ function drawUS() {
   currentView = "us";
   chartCounties = countyData ? countyData.filter(d => d.rate_2022 != null) : [];
   document.getElementById("back-btn").style.display = "none";
+  const mapHint = document.getElementById("map-hint");
+  if (mapHint) mapHint.style.display = "flex";
   g.selectAll("*").remove();
   setupZoom();
 
@@ -1529,9 +1644,11 @@ function drawState(stateFips) {
     : [];
 
   document.getElementById("back-btn").style.display = "block";
+  const mapHintState = document.getElementById("map-hint");
+  if (mapHintState) { mapHintState.style.display = "flex"; }
   const stateName = topojson.feature(topoData, topoData.objects.states).features
     .find(d => d.id.toString().padStart(2,"0") === stateFips)?.properties.name || stateFips;
-  document.getElementById("back-btn").textContent = `← ${stateName}`;
+  document.getElementById("back-btn").textContent = `← Back to US Map`;
 
   g.selectAll("*").remove();
   if (zoomBehavior) {
@@ -1633,27 +1750,44 @@ function showSidebar(fips) {
   }
 
   // Model Analysis section (only shown when residual data exists)
-  const modelSection = d.residual != null ? `
-    <div class="section-title">Model Analysis</div>
+  const modelSection = d.residual != null ? (() => {
+    const expected = d.fitted != null ? d.fitted.toFixed(1) : null;
+    const actual   = chg;
+    const gap      = d.residual.toFixed(1);
+    const expectedDir = d.fitted < 0 ? "improve" : "worsen";
+    const expectedAbs = d.fitted != null ? Math.abs(d.fitted).toFixed(1) : null;
+    const actualDir   = d.rate_change < 0 ? "improved" : "worsened";
+    const gapDir      = d.residual > 0 ? "worse" : "better";
+
+    const plainSentence = expectedAbs
+      ? `Based on its poverty rate, insurance coverage, and demographics, we expected this county to <strong style="color:var(--muted)">${expectedDir} by ${expectedAbs}</strong>. Instead, it <strong style="${d.rate_change > 0 ? 'color:var(--increase)' : 'color:var(--decrease)'}">${actualDir} by ${Math.abs(d.rate_change).toFixed(1)}</strong> — <strong>${Math.abs(d.residual).toFixed(1)} points ${gapDir}</strong> than expected.`
+      : "";
+
+    const outlierBadge = d.is_outlier
+      ? `<div class="outlier-note">⚠ One of the 20 counties where the gap between expectation and reality is largest — this county's outcome remains unexplained by the data we have.</div>`
+      : "";
+
+    const technicalDetails = `
+      <details style="margin-top:10px;cursor:pointer">
+        <summary style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);letter-spacing:0.05em;list-style:none">▸ Technical details</summary>
+        <div style="margin-top:8px;font-size:11px;font-family:'DM Mono',monospace;color:#556070;line-height:1.6">
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span>Predicted change</span><span style="color:var(--text)">${d.fitted > 0 ? "+" : ""}${d.fitted.toFixed(1)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span>Actual change</span><span style="${d.rate_change > 0 ? 'color:var(--increase)' : 'color:var(--decrease)'}">${chgSign}${chg}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Residual (gap)</span><span style="${d.residual > 0 ? 'color:var(--increase)' : 'color:var(--decrease)'}">${d.residual > 0 ? "+" : ""}${d.residual.toFixed(1)}</span></div>
+          <div style="margin-top:6px;opacity:0.7;font-size:10px">Model A3 · OLS (HC3) · 6 predictors · R²=0.186</div>
+        </div>
+      </details>`;
+
+    return `
+    <div class="section-title" style="margin-top:16px">Why This County?</div>
     <div class="section-gap">
-      <div style="font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);line-height:1.6;margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
-        Based on this county's poverty rate, insurance coverage, race, and age — the model ${d.fitted < 0 ? "predicted an improvement" : "predicted a change"} of <strong style="color:var(--text)">${d.fitted > 0 ? "+" : ""}${d.fitted.toFixed(1)}</strong>. The actual change was <strong style="${d.rate_change > 0 ? "color:var(--increase)" : "color:var(--decrease)"}">${d.rate_change > 0 ? "+" : ""}${chg}</strong>.
+      <div style="font-size:13px;font-family:'DM Mono',monospace;color:var(--muted);line-height:1.7;padding:12px 14px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+        ${plainSentence}
       </div>
-      <div class="stat-row">
-        <span class="stat-label">Predicted Change</span>
-        <span class="stat-value">${d.fitted > 0 ? "+" : ""}${d.fitted.toFixed(1)}</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Actual Change</span>
-        <span class="stat-value ${chgClass}">${chgSign}${chg}</span>
-      </div>
-      <div class="stat-row">
-        <span class="stat-label">Unexplained gap</span>
-        <span class="stat-value ${d.residual > 0 ? "up" : "down"}">${d.residual > 0 ? "+" : ""}${d.residual.toFixed(1)}</span>
-      </div>
-      <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);margin-top:8px;opacity:0.7">Model uses race composition (other & multiracial) as predictors alongside poverty and age.</div>
-      ${d.is_outlier ? `<div class="outlier-note">⚠ Outlier county — worsening far exceeds socioeconomic prediction (rank #${d.outlier_rank} of 20)</div>` : ""}
-    </div>` : "";
+      ${outlierBadge}
+      ${technicalDetails}
+    </div>`;
+  })() : "";
 
   content.innerHTML = `
     <button class="sidebar-close" onclick="closeSidebar()">✕</button>
@@ -1696,12 +1830,16 @@ function showSidebar(fips) {
     </div>
   `;
   sidebar.classList.add("open");
+  const hint = document.getElementById("map-hint");
+  if (hint) hint.style.display = "none";
 }
 
 function closeSidebar() {
   document.getElementById("sidebar").classList.remove("open");
   selectedFips = null;
   g.selectAll(".county-path").classed("selected", false);
+  const hint = document.getElementById("map-hint");
+  if (hint) hint.style.display = "flex";
 }
 
 // ─── ZOOM ─────────────────────────────────────────────────
